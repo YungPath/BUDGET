@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SmartBudget Pro</title>
+<style>
+body{
+  font-family:Arial;
+  background:#f4f6f9;
+  padding:20px;
+  text-align:center;
+}
+.container{
+  max-width:500px;
+  margin:auto;
+  background:white;
+  padding:25px;
+  border-radius:8px;
+  box-shadow:0 0 10px rgba(0,0,0,0.1);
+}
+input,select,button{
+  width:100%;
+  padding:10px;
+  margin:8px 0;
+}
+button{
+  background:#007bff;
+  color:white;
+  border:none;
+  cursor:pointer;
+}
+.google{
+  background:#db4437;
+}
+#dashboard{
+  display:none;
+}
+.expense{
+  display:flex;
+  justify-content:space-between;
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<div id="auth">
+  <h2>SmartBudget Pro</h2>
+  <input type="email" id="email" placeholder="Email">
+  <input type="password" id="password" placeholder="Password">
+  <button id="signup">Sign Up</button>
+  <button id="login">Login</button>
+  <button id="googleLogin" class="google">Login with Google</button>
+  <p id="msg"></p>
+</div>
+
+<div id="dashboard">
+  <h2>Weekly Budget</h2>
+  <p id="welcome"></p>
+
+  <input type="number" id="income" placeholder="Weekly Income">
+
+  <select id="category">
+    <option>Food</option>
+    <option>Transportation</option>
+    <option>Fun</option>
+    <option>Bills</option>
+    <option>Savings</option>
+    <option>Other</option>
+  </select>
+
+  <input type="number" id="amount" placeholder="Expense Amount">
+  <button id="addExpense">Add Expense</button>
+
+  <h3>Total: <span id="total">0</span></h3>
+  <h3>Remaining: <span id="remaining">0</span></h3>
+
+  <div id="expenses"></div>
+
+  <button id="logout">Logout</button>
+</div>
+
+</div>
+
+<!-- FIREBASE COMPAT VERSION (more stable on Netlify) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+
+/* 🔥 REPLACE WITH YOUR FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_AUTH_DOMAIN",
+  projectId: "YOUR_PROJECT_ID",
+  appId: "YOUR_APP_ID"
+};
+
+firebase.initializeApp(firebaseConfig);
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let currentUser = null;
+let expensesData = [];
+
+/* AUTH */
+document.getElementById("signup").onclick = () => {
+  auth.createUserWithEmailAndPassword(email.value, password.value)
+      .catch(e => msg.innerText = e.message);
+};
+
+document.getElementById("login").onclick = () => {
+  auth.signInWithEmailAndPassword(email.value, password.value)
+      .catch(e => msg.innerText = e.message);
+};
+
+document.getElementById("googleLogin").onclick = () => {
+  const provider = new firebase.auth.GoogleAuthProvider();
+  auth.signInWithPopup(provider)
+      .catch(e => msg.innerText = e.message);
+};
+
+document.getElementById("logout").onclick = () => {
+  auth.signOut();
+};
+
+/* AUTH STATE */
+auth.onAuthStateChanged(async user => {
+  if(user){
+    currentUser = user;
+    auth.style.display="none";
+    dashboard.style.display="block";
+    welcome.innerText="Welcome "+user.email;
+    loadData();
+  }else{
+    auth.style.display="block";
+    dashboard.style.display="none";
+  }
+});
+
+/* LOAD USER DATA */
+async function loadData(){
+  const doc = await db.collection("budgets").doc(currentUser.uid).get();
+  if(doc.exists){
+    income.value = doc.data().income || 0;
+    expensesData = doc.data().expenses || [];
+    render();
+  }
+}
+
+/* ADD EXPENSE */
+document.getElementById("addExpense").onclick = async () => {
+  let inc = parseFloat(income.value);
+  let amt = parseFloat(amount.value);
+  if(isNaN(inc)||isNaN(amt)) return;
+
+  expensesData.push({
+    category:category.value,
+    amount:amt
+  });
+
+  await db.collection("budgets").doc(currentUser.uid).set({
+    income:inc,
+    expenses:expensesData
+  });
+
+  amount.value="";
+  render();
+};
+
+/* RENDER */
+function render(){
+  let total=0;
+  expenses.innerHTML="";
+  expensesData.forEach(e=>{
+    total+=e.amount;
+    expenses.innerHTML+=
+    `<div class="expense">
+       <span>${e.category}</span>
+       <span>${e.amount}</span>
+     </div>`;
+  });
+
+  document.getElementById("total").innerText=total;
+  document.getElementById("remaining").innerText=income.value-total;
+}
+
+</script>
+
+</body>
+</html>
